@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Literal, Tuple
 import pandas as pd
+import requests_cache
 
 try:
     import yfinance as yf
@@ -12,12 +13,18 @@ except Exception as e:
         "Le module 'yfinance' est requis. Installe-le avec: pip install yfinance"
     ) from e
 
+
 IndexName = Literal["S&P 500", "EuroStoxx 50"]
 
 INDEX_MAP: dict[IndexName, str] = {
     "S&P 500": "^GSPC",
-    "EuroStoxx 50": "^STOXX50E",  # Yahoo symbol
+    "EuroStoxx 50": "^SX5E",  # Yahoo symbol corrigé pour compatibilité Cloud
 }
+
+
+# --- Session HTTP persistante et fiable ---
+_session = requests_cache.CachedSession("yfinance.cache")
+_session.headers["User-agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 
 
 def fetch_index_history(
@@ -31,32 +38,41 @@ def fetch_index_history(
 
     end = end or dt.date.today()
     start = end - dt.timedelta(days=int(years * 365.25))
-
     ticker = INDEX_MAP[name]
-    df = yf.download(
-        ticker,
-        start=start,
-        end=end,
-        interval=interval,
-        auto_adjust=False,
-        progress=False,
-    )
+
+    # --- Tentatives de téléchargement robustes ---
+    df = pd.DataFrame()
+    max_tries = 3
+    for i in range(max_tries):
+        try:
+            df = yf.download(
+                ticker,
+                start=start,
+                end=end,
+                interval=interval,
+                auto_adjust=False,
+                progress=False,
+                threads=False,  # important pour Streamlit Cloud
+                session=_session,
+            )
+            if not df.empty:
+                break
+        except Exception as e:
+            print(f"Tentative {i+1}/{max_tries} échouée pour {ticker}: {e}")
 
     if df.empty:
         raise RuntimeError(f"Aucune donnée Yahoo pour {name} ({ticker}).")
 
     col = "Adj Close" if "Adj Close" in df.columns else "Close"
     s = df[col]
-    
-    # Forcer en Series si jamais un DataFrame sort
+
     if isinstance(s, pd.DataFrame):
         s = s.iloc[:, 0]
-    
+
     s = s.copy()
     s.index = pd.to_datetime(s.index, utc=True)
     s.name = name
     return s
-
 
 
 def get_performances(name: IndexName) -> Tuple[float, float, float]:
