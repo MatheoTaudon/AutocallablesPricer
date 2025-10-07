@@ -1,11 +1,13 @@
-streamlit==1.39.0
-streamlit-option-menu==0.3.12
-numpy==1.26.4
-pandas==2.2.3
-plotly==5.24.1
-yfinance==0.2.43
-docxtpl==0.16.8
-python-docx==1.1.2
-requests-cache
-requests
+# === Streamlit app dependencies ===
+streamlit>=1.37.0
+pandas>=2.2.0
+numpy>=1.26.0
+yfinance>=0.2.43
+openpyxl>=3.1.2
+python-docx>=1.1.0
+matplotlib>=3.8.0
+plotly>=5.24.0
 
+# === Utils and formatting ===
+requests>=2.31.0
+typing_extensions>=4.9.0
