@@ -9,15 +9,16 @@ from typing import Tuple
 # ==============================================================
 # Yahoo Finance (hybride API + fallback CSV local)
 # ==============================================================
+
 DATA_DIR = "download"
 
-# Fichiers CSV pour Streamlit Cloud
+# Fichiers CSV locaux
 CSV_MAP = {
     "^GSPC": "SP500.csv",
     "^STOXX50E": "SX5E.csv",
 }
 
-# Alias possibles pour les indices (compatibilité totale avec ton projet)
+# Alias possibles pour les indices (compatibilité totale)
 INDEX_TICKERS = {
     # S&P 500
     "SP500": "^GSPC",
@@ -34,20 +35,32 @@ INDEX_TICKERS = {
     "Euro Stoxx 50": "^STOXX50E",
 }
 
+# ==============================================================
+# Utilitaires internes
+# ==============================================================
+
+def _flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Aplati les colonnes MultiIndex issues de yfinance ou CSV."""
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = [' '.join([str(c) for c in col if c]).strip() for col in df.columns.values]
+    else:
+        df.columns = [str(c).strip() for c in df.columns]
+    return df
 
 # ==============================================================
-# Téléchargement hybride : API ou CSV local
+# Téléchargement hybride (yfinance + fallback CSV)
 # ==============================================================
 
 def download_price(ticker: str, start=None, end=None) -> pd.DataFrame:
     """
     Télécharge les données d’un ticker via yfinance.
-    Si l’appel échoue (ex: Streamlit Cloud), lit le CSV local correspondant.
+    Si échec (Streamlit Cloud), lit le CSV local correspondant.
     """
-    # 1️⃣ Tentative via Yahoo Finance
     try:
         df = yf.download(ticker, start=start, end=end)
         if df is not None and not df.empty:
+            df = _flatten_columns(df)
+            df.columns = [c.lower() for c in df.columns]
             print(f"[INFO] Données Yahoo Finance chargées pour {ticker}")
             return df
         else:
@@ -56,7 +69,7 @@ def download_price(ticker: str, start=None, end=None) -> pd.DataFrame:
         print(f"[WARN] Échec du téléchargement {ticker}: {e}")
         print(f"[INFO] Lecture du CSV local...")
 
-    # 2️⃣ Fallback CSV local
+    # --- Fallback CSV local ---
     filename = CSV_MAP.get(ticker)
     if not filename:
         raise ValueError(f"Aucun fichier CSV défini pour le ticker {ticker}")
@@ -69,9 +82,8 @@ def download_price(ticker: str, start=None, end=None) -> pd.DataFrame:
         )
 
     df = pd.read_csv(path, index_col=0, parse_dates=True)
-
-    # Normalisation des colonnes (maj/min)
-    df.columns = [c.strip().title() for c in df.columns]
+    df = _flatten_columns(df)
+    df.columns = [c.lower() for c in df.columns]
 
     if start:
         df = df[df.index >= pd.to_datetime(start)]
@@ -84,7 +96,7 @@ def download_price(ticker: str, start=None, end=None) -> pd.DataFrame:
 
 def get_data(tickers, start=None, end=None):
     """
-    Compatibilité complète avec l’ancien code :
+    Compatibilité complète :
     - Accepte un ticker ou une liste de tickers.
     - Retourne un DataFrame ou un dict de DataFrames.
     """
@@ -96,16 +108,15 @@ def get_data(tickers, start=None, end=None):
         all_data[t] = download_price(t, start, end)
     return all_data
 
-
 # ==============================================================
-# Fonctions de séries historiques et performances
+# Historique d'indice et performances
 # ==============================================================
 
 def fetch_index_history(name: str, years: int, end: dt.date = None) -> pd.Series:
     """
     Retourne la série historique de clôture ajustée pour un indice donné
     sur la période demandée (en années).
-    Toujours retourne une pd.Series (corrige l’erreur "hist doit être une Series").
+    Toujours retourne une pd.Series propre.
     """
     end = end or dt.date.today()
     start = end - dt.timedelta(days=years * 365)
@@ -115,11 +126,10 @@ def fetch_index_history(name: str, years: int, end: dt.date = None) -> pd.Series
         raise ValueError(f"Indice inconnu : {name}")
 
     df = download_price(ticker, start=start, end=end)
+    df = _flatten_columns(df)
+    df.columns = [c.lower() for c in df.columns]
 
-    # Normalise les noms de colonnes
-    df.columns = [c.strip().lower() for c in df.columns]
-
-    # Choisit automatiquement la colonne la plus pertinente
+    # Choix de la colonne de prix la plus pertinente
     if "adj close" in df.columns:
         s = df["adj close"].dropna()
     elif "close" in df.columns:
@@ -127,7 +137,7 @@ def fetch_index_history(name: str, years: int, end: dt.date = None) -> pd.Series
     else:
         raise RuntimeError(f"Aucune colonne 'close' ou 'adj close' trouvée pour {name}")
 
-    # Force le type Series
+    # Assure qu'on retourne bien une Series
     if not isinstance(s, pd.Series):
         s = pd.Series(s.squeeze())
 
@@ -153,7 +163,8 @@ def get_performances(name: str) -> Tuple[float, float, float]:
             perf = None
         perf_values.append(perf)
 
-    perf_1y, perf_5y, perf_10y = perf_values
-    return perf_1y, perf_5y, perf_10y
+    return tuple(perf_values)
+
+
 
 
