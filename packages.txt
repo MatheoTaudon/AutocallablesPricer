@@ -1,4 +1,8 @@
+# System dependencies required by Plotly Kaleido for image export
 chromium
 fonts-liberation
 libgl1
 libglib2.0-0
+libnss3
+libasound2
+libx11-6
