@@ -1,133 +1,120 @@
 # utils/yahoo.py
 
-from __future__ import annotations
-import datetime as dt
-from typing import Literal, Tuple
-import pandas as pd
 import os
-import requests
-import requests_cache
+import datetime as dt
+import pandas as pd
+import yfinance as yf
+from typing import Tuple
 
-try:
-    import yfinance as yf
-except Exception as e:
-    raise ImportError(
-        "Le module 'yfinance' est requis. Installe-le avec: pip install yfinance"
-    ) from e
+# ==============================================================
+# Yahoo Finance (hybride API + fallback CSV local)
+# ==============================================================
 
+DATA_DIR = "download"
 
-IndexName = Literal["S&P 500", "EuroStoxx 50"]
+# Correspondance entre tickers et fichiers CSV
+CSV_MAP = {
+    "^GSPC": "SP500.csv",
+    "^STOXX50E": "SX5E.csv",
+}
 
-INDEX_MAP: dict[IndexName, str] = {
-    "S&P 500": "^GSPC",
-    "EuroStoxx 50": "^SX5E",  # symbole compatible Yahoo
+# Mapping entre nom d'indice lisible et son ticker Yahoo
+INDEX_TICKERS = {
+    "SP500": "^GSPC",
+    "SX5E": "^STOXX50E",
 }
 
 
-# --- Configuration de session fiable pour Yahoo ---
-_session = requests_cache.CachedSession("yfinance.cache")
-_session.headers["User-agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+# ==============================================================
+# FONCTIONS PRINCIPALES
+# ==============================================================
 
+def download_price(ticker: str, start=None, end=None) -> pd.DataFrame:
+    """
+    Télécharge les données d’un ticker via Yahoo Finance.
+    En cas d’échec (Streamlit Cloud, etc.), fallback vers CSV local.
+    """
 
-# --- Clé Alpha Vantage intégrée ---
-ALPHAVANTAGE_API_KEY = "Q2DPMRMQCB1513GY"
-
-
-def _fetch_from_yahoo(ticker: str, start: dt.date, end: dt.date, interval: str) -> pd.DataFrame:
-    """Essaye de récupérer les données depuis Yahoo Finance."""
+    # 1️⃣ Essai avec yfinance
     try:
-        df = yf.download(
-            ticker,
-            start=start,
-            end=end,
-            interval=interval,
-            auto_adjust=False,
-            progress=False,
-            threads=False,
-            session=_session,
+        df = yf.download(ticker, start=start, end=end)
+        if df is not None and not df.empty:
+            print(f"[INFO] Données Yahoo Finance chargées pour {ticker}")
+            return df
+        else:
+            print(f"[INFO] Données vides pour {ticker}, fallback CSV local...")
+    except Exception as e:
+        print(f"[WARN] Échec du téléchargement {ticker}: {e}")
+        print(f"[INFO] Lecture du CSV local...")
+
+    # 2️⃣ Lecture CSV local
+    filename = CSV_MAP.get(ticker)
+    if not filename:
+        raise ValueError(f"Aucun fichier CSV défini pour le ticker {ticker}")
+
+    path = os.path.join(DATA_DIR, filename)
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"Le fichier {path} est introuvable.\n"
+            f"Ajoute {filename} dans le dossier /{DATA_DIR}/"
         )
-        return df
-    except Exception as e:
-        print(f"⚠️ Erreur Yahoo pour {ticker}: {e}")
-        return pd.DataFrame()
+
+    df = pd.read_csv(path, index_col=0, parse_dates=True)
+
+    if start:
+        df = df[df.index >= pd.to_datetime(start)]
+    if end:
+        df = df[df.index <= pd.to_datetime(end)]
+
+    print(f"[INFO] Données lues depuis le CSV local : {path}")
+    return df
 
 
-def _fetch_from_alphavantage(ticker: str) -> pd.DataFrame:
-    """Fallback via Alpha Vantage si Yahoo échoue."""
-    api_key = ALPHAVANTAGE_API_KEY
-    if not api_key:
-        print("⚠️ Aucune clé API Alpha Vantage trouvée.")
-        return pd.DataFrame()
+def get_data(tickers, start=None, end=None):
+    """
+    Compatibilité complète avec l’ancien code :
+    - Accepte un ticker ou une liste de tickers.
+    - Retourne un DataFrame ou un dict de DataFrames.
+    """
+    if isinstance(tickers, str):
+        return download_price(tickers, start, end)
 
-    # Conversion symboles Yahoo -> Alpha Vantage
-    symbol_map = {
-        "^GSPC": "SPX",
-        "^SX5E": "SX5E",
-    }
-    symbol = symbol_map.get(ticker, ticker)
-
-    url = (
-        f"https://www.alphavantage.co/query"
-        f"?function=TIME_SERIES_DAILY_ADJUSTED"
-        f"&symbol={symbol}"
-        f"&outputsize=full"
-        f"&apikey={api_key}"
-    )
-
-    try:
-        r = requests.get(url)
-        data = r.json()
-        if "Time Series (Daily)" not in data:
-            print(f"⚠️ Alpha Vantage n’a pas retourné de données valides pour {symbol}.")
-            return pd.DataFrame()
-
-        df = pd.DataFrame.from_dict(data["Time Series (Daily)"], orient="index", dtype=float)
-        df.index = pd.to_datetime(df.index)
-        df.sort_index(inplace=True)
-        df.rename(columns={"5. adjusted close": "Adj Close", "4. close": "Close"}, inplace=True)
-        return df
-    except Exception as e:
-        print(f"⚠️ Erreur Alpha Vantage pour {symbol}: {e}")
-        return pd.DataFrame()
+    all_data = {}
+    for t in tickers:
+        all_data[t] = download_price(t, start, end)
+    return all_data
 
 
-def fetch_index_history(
-    name: IndexName,
-    years: int,
-    end: dt.date | None = None,
-    interval: str = "1d",
-) -> pd.Series:
-    """Télécharge l'historique d'un indice depuis Yahoo, puis fallback Alpha Vantage si nécessaire."""
-    if name not in INDEX_MAP:
-        raise ValueError(f"Indice inconnu: {name}. Choisis parmi: {list(INDEX_MAP)}")
+# ==============================================================
+# HISTORIQUE D'INDICE ET PERFORMANCES
+# ==============================================================
 
+def fetch_index_history(name: str, years: int, end: dt.date = None) -> pd.Series:
+    """
+    Retourne la série historique de clôture ajustée pour un indice donné
+    sur la période demandée (en années).
+    """
     end = end or dt.date.today()
-    start = end - dt.timedelta(days=int(years * 365.25))
-    ticker = INDEX_MAP[name]
+    start = end - dt.timedelta(days=years * 365)
+    ticker = INDEX_TICKERS.get(name)
 
-    # --- 1. Tentative Yahoo ---
-    df = _fetch_from_yahoo(ticker, start, end, interval)
+    if not ticker:
+        raise ValueError(f"Indice inconnu : {name}")
 
-    # --- 2. Fallback Alpha Vantage ---
-    if df.empty:
-        print(f"🔁 Fallback vers Alpha Vantage pour {ticker}")
-        df = _fetch_from_alphavantage(ticker)
+    df = download_price(ticker, start=start, end=end)
 
-    if df.empty:
-        raise RuntimeError(f"Aucune donnée trouvée pour {name} ({ticker}).")
-
-    col = "Adj Close" if "Adj Close" in df.columns else "Close"
-    s = df[col]
-    if isinstance(s, pd.DataFrame):
-        s = s.iloc[:, 0]
-    s = s.copy()
-    s.index = pd.to_datetime(s.index, utc=True)
-    s.name = name
-    return s
+    if "Adj Close" in df.columns:
+        return df["Adj Close"].dropna()
+    elif "Close" in df.columns:
+        return df["Close"].dropna()
+    else:
+        raise RuntimeError("Colonnes manquantes dans les données")
 
 
-def get_performances(name: IndexName) -> Tuple[float, float, float]:
-    """Retourne les performances annualisées de l’indice sur 1 an, 5 ans et 10 ans (%)."""
+def get_performances(name: str) -> Tuple[float, float, float]:
+    """
+    Retourne les performances annualisées de l’indice sur 1 an, 5 ans et 10 ans (%).
+    """
     today = dt.date.today()
     perf_values = []
 
