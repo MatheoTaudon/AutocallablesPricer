@@ -9,22 +9,22 @@ from typing import Tuple
 # ==============================================================
 # Yahoo Finance (hybride API + fallback CSV local)
 # ==============================================================
-
 DATA_DIR = "download"
 
-# Correspondance entre tickers et fichiers CSV
+# Fichiers CSV pour Streamlit Cloud
 CSV_MAP = {
     "^GSPC": "SP500.csv",
     "^STOXX50E": "SX5E.csv",
 }
 
-# Mapping entre nom d'indice lisible et son ticker Yahoo
+# Alias possibles pour les indices (compatibilité totale avec ton projet)
 INDEX_TICKERS = {
     # S&P 500
     "SP500": "^GSPC",
     "S&P 500": "^GSPC",
     "S&P500": "^GSPC",
     "US500": "^GSPC",
+    "SP 500": "^GSPC",
 
     # Euro Stoxx 50
     "SX5E": "^STOXX50E",
@@ -36,16 +36,15 @@ INDEX_TICKERS = {
 
 
 # ==============================================================
-# FONCTIONS PRINCIPALES
+# Téléchargement hybride : API ou CSV local
 # ==============================================================
 
 def download_price(ticker: str, start=None, end=None) -> pd.DataFrame:
     """
-    Télécharge les données d’un ticker via Yahoo Finance.
-    En cas d’échec (Streamlit Cloud, etc.), fallback vers CSV local.
+    Télécharge les données d’un ticker via yfinance.
+    Si l’appel échoue (ex: Streamlit Cloud), lit le CSV local correspondant.
     """
-
-    # 1️⃣ Essai avec yfinance
+    # 1️⃣ Tentative via Yahoo Finance
     try:
         df = yf.download(ticker, start=start, end=end)
         if df is not None and not df.empty:
@@ -57,7 +56,7 @@ def download_price(ticker: str, start=None, end=None) -> pd.DataFrame:
         print(f"[WARN] Échec du téléchargement {ticker}: {e}")
         print(f"[INFO] Lecture du CSV local...")
 
-    # 2️⃣ Lecture CSV local
+    # 2️⃣ Fallback CSV local
     filename = CSV_MAP.get(ticker)
     if not filename:
         raise ValueError(f"Aucun fichier CSV défini pour le ticker {ticker}")
@@ -70,6 +69,9 @@ def download_price(ticker: str, start=None, end=None) -> pd.DataFrame:
         )
 
     df = pd.read_csv(path, index_col=0, parse_dates=True)
+
+    # Normalisation des colonnes (maj/min)
+    df.columns = [c.strip().title() for c in df.columns]
 
     if start:
         df = df[df.index >= pd.to_datetime(start)]
@@ -96,13 +98,14 @@ def get_data(tickers, start=None, end=None):
 
 
 # ==============================================================
-# HISTORIQUE D'INDICE ET PERFORMANCES
+# Fonctions de séries historiques et performances
 # ==============================================================
 
 def fetch_index_history(name: str, years: int, end: dt.date = None) -> pd.Series:
     """
     Retourne la série historique de clôture ajustée pour un indice donné
     sur la période demandée (en années).
+    Toujours retourne une pd.Series (corrige l’erreur "hist doit être une Series").
     """
     end = end or dt.date.today()
     start = end - dt.timedelta(days=years * 365)
@@ -113,12 +116,23 @@ def fetch_index_history(name: str, years: int, end: dt.date = None) -> pd.Series
 
     df = download_price(ticker, start=start, end=end)
 
-    if "Adj Close" in df.columns:
-        return df["Adj Close"].dropna()
-    elif "Close" in df.columns:
-        return df["Close"].dropna()
+    # Normalise les noms de colonnes
+    df.columns = [c.strip().lower() for c in df.columns]
+
+    # Choisit automatiquement la colonne la plus pertinente
+    if "adj close" in df.columns:
+        s = df["adj close"].dropna()
+    elif "close" in df.columns:
+        s = df["close"].dropna()
     else:
-        raise RuntimeError("Colonnes manquantes dans les données")
+        raise RuntimeError(f"Aucune colonne 'close' ou 'adj close' trouvée pour {name}")
+
+    # Force le type Series
+    if not isinstance(s, pd.Series):
+        s = pd.Series(s.squeeze())
+
+    s.name = name
+    return s
 
 
 def get_performances(name: str) -> Tuple[float, float, float]:
@@ -141,4 +155,5 @@ def get_performances(name: str) -> Tuple[float, float, float]:
 
     perf_1y, perf_5y, perf_10y = perf_values
     return perf_1y, perf_5y, perf_10y
+
 
