@@ -56,6 +56,16 @@ def _read_csv_data(ticker: str) -> pd.DataFrame:
     df = pd.read_csv(path, index_col=0, parse_dates=True)
     df = _flatten_columns(df)
     df.columns = [c.lower() for c in df.columns]
+
+    try:
+        df.index = pd.to_datetime(df.index)
+    except Exception:
+        # Si l'index n'est pas une date, tenter la colonne 'date'
+        if 'date' in df.columns:
+            df['date'] = pd.to_datetime(df['date'])
+            df.set_index('date', inplace=True)
+        else:
+            raise RuntimeError(f"Impossible de convertir l'index en date pour {ticker}")
     return df
 
 
