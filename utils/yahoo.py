@@ -20,8 +20,18 @@ CSV_MAP = {
 
 # Mapping entre nom d'indice lisible et son ticker Yahoo
 INDEX_TICKERS = {
+    # S&P 500
     "SP500": "^GSPC",
+    "S&P 500": "^GSPC",
+    "S&P500": "^GSPC",
+    "US500": "^GSPC",
+
+    # Euro Stoxx 50
     "SX5E": "^STOXX50E",
+    "EUROSTOXX50": "^STOXX50E",
+    "EuroStoxx 50": "^STOXX50E",
+    "Eurostoxx 50": "^STOXX50E",
+    "Euro Stoxx 50": "^STOXX50E",
 }
 
 
