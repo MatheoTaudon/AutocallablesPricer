@@ -1,4 +1,3 @@
-# System dependencies required by Plotly Kaleido for image export
 chromium
 fonts-liberation
 libgl1
