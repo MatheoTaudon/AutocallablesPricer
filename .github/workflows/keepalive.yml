@@ -3,7 +3,7 @@ name: Keep Streamlit App Alive
 on:
   schedule:
     # Run every 6 hours
-    - cron: "0 */3 * * *"
+    - cron: "*/10 * * * *"
 
 jobs:
   keep-alive:
