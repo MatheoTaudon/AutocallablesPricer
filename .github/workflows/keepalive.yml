@@ -2,8 +2,9 @@ name: Keep Streamlit App Alive
 
 on:
   schedule:
-    # Run every 6 hours
+    # Run every 10 minutes
     - cron: "*/10 * * * *"
+  workflow_dispatch:  # permet aussi de le lancer manuellement
 
 jobs:
   keep-alive:
@@ -11,4 +12,5 @@ jobs:
     steps:
       - name: Ping the Streamlit app
         run: |
-          curl -s https://autocallablespricer.streamlit.app/ > /dev/null
+          curl -s -o /dev/null -w "%{http_code}\n" https://autocallablespricer.streamlit.app
+
