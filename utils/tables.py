@@ -41,7 +41,7 @@ def table_information(
         ("Equivalent ZCB (per 100)", f"{equivalent_zcb:.2f}"),
         ("Forward at maturity", f"{forward_at_maturity:.2f}"),
         ("Prob. of capital loss", fmt_pct(prob_capital_loss)),
-        ("Prob. of full redemption (100)", fmt_pct(prob_full_100)),
+        ("Prob. of full redemption last year", fmt_pct(prob_full_100)),
     ]
     df = pd.DataFrame(rows, columns=["Metric", "Value"])
     return df.reset_index(drop=True)
