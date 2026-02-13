@@ -9,13 +9,13 @@ st.markdown("""
     <style>
         /* Sidebar (volet gauche) */
         [data-testid="stSidebar"] {
-            background-color: background-color: #2e2e2e; /* ✅ contraste avec le contenu */
+            background-color: #2e2e2e; 
             color: var(--text-color);
         }
 
         /* Conteneur principal */
         .block-container {
-            background-color: var(--background-color); /* ✅ fond principal */
+            background-color: var(--background-color); 
             padding: 2rem;
             border-radius: 10px;
         }
@@ -52,17 +52,17 @@ st.markdown("""
 with st.sidebar:
     selected_section = option_menu(
         menu_title=None,
-        options=["Pricer", "Profile"],
-        icons=["graph-up", "person"],
+        options=["Pricer"], 
+        icons=["graph-up"],  
         menu_icon=None,
         default_index=0,
         styles={
             "container": {
                 "padding": "0!important",
-                "background-color": "var(--secondary-background-color)",  # ✅ fond auto
+                "background-color": "var(--secondary-background-color)",
             },
             "icon": {
-                "color": "var(--text-color)",  # ✅ icônes auto
+                "color": "var(--text-color)",
                 "font-size": "18px",
             },
             "nav-link": {
@@ -72,10 +72,10 @@ with st.sidebar:
                 "margin": "5px 0",
                 "border-radius": "5px",
                 "color": "var(--text-color)",
-                "--hover-color": "var(--background-color)",  # ✅ hover discret
+                "--hover-color": "var(--background-color)",
             },
             "nav-link-selected": {
-                "background-color": "var(--primary-color)",  # ✅ accent du thème
+                "background-color": "var(--primary-color)",
                 "color": "white",
                 "border-radius": "6px",
             },
@@ -84,8 +84,7 @@ with st.sidebar:
 
 # --- Routing vers les pages ---
 pages = {
-    "Pricer": "modules.accueil",   # ton pricer = accueil.py
-    "Profile": "modules.profile"
+    "Pricer": "modules.accueil",  
 }
 
 if selected_section in pages:
