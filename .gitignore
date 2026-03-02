@@ -1,0 +1,64 @@
+# ===========================
+# Python
+# ===========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ===========================
+# Environment & Secrets
+# ===========================
+.env
+.env.*
+secrets.toml
+.streamlit/secrets.toml
+
+# ===========================
+# IDEs
+# ===========================
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ===========================
+# OS
+# ===========================
+.DS_Store
+Thumbs.db
+
+# ===========================
+# Project-specific
+# ===========================
+# Downloaded market data (regenerated at runtime)
+download/
+
+# Generated outputs (charts, plots)
+outputs/
+
+# Generated term sheets
+Termsheet/
+
+# Personal files
+CV/
