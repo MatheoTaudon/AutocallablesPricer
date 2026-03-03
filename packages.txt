@@ -1,7 +1,6 @@
-chromium
 fonts-liberation
 libgl1
 libglib2.0-0
 libnss3
-libasound2
+libasound2t64
 libx11-6
